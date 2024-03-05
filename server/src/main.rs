@@ -1,16 +1,14 @@
-use axum::{routing::get, Router};
-use sea_orm::{SqlxPostgresConnector};
-use sqlx::PgPool;
-
-async fn hello_world() -> &'static str {
-    "Hello, world!"
-}
+use migration::{Migrator, MigratorTrait};
+use sea_orm::SqlxPostgresConnector;
+use shuttle_secrets::SecretStore;
 
 #[shuttle_runtime::main]
-async fn main(#[shuttle_shared_db::Postgres] pool: PgPool) -> shuttle_axum::ShuttleAxum {
-    let conn = SqlxPostgresConnector::from_sqlx_postgres_pool(pool);
-
-    let router = Router::new().route("/", get(hello_world));
-
+async fn main(
+    #[shuttle_shared_db::Postgres] pool: sqlx::PgPool,
+    #[shuttle_secrets::Secrets] secrets: SecretStore,
+) -> shuttle_axum::ShuttleAxum {
+    let coon = SqlxPostgresConnector::from_sqlx_postgres_pool(pool);
+    Migrator::up(&coon, None).await.unwrap();
+    let router = actions::build_root_router(coon, secrets)?;
     Ok(router.into())
 }
