@@ -3,8 +3,13 @@ use axum::{
     async_trait,
     extract::FromRequestParts,
     http::{request::Parts, StatusCode},
+    RequestPartsExt,
 };
 
+use axum_extra::{
+    headers::{authorization::Bearer, Authorization},
+    TypedHeader,
+};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 
@@ -13,17 +18,19 @@ use crate::{error::AppError, AppState};
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
     pub exp: i64,
-    pub access_token: String,
     pub user_id: i32,
+    pub access_token: String,
+    pub refresh_token: String,
 }
 
 impl Claims {
-    pub fn new(access_token: String, user_id: i32) -> Self {
+    pub fn new(user_id: i32, access_token: String, refresh_token: String) -> Self {
         let exp = chrono::Utc::now().timestamp() + 25200;
         Self {
             exp,
-            access_token,
             user_id,
+            access_token,
+            refresh_token,
         }
     }
 
@@ -52,12 +59,26 @@ impl FromRequestParts<AppState> for Claims {
     type Rejection = AppError;
     async fn from_request_parts(
         parts: &mut Parts,
-        _state: &AppState,
+        state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let res = parts
-            .extensions
-            .get::<Self>()
-            .ok_or(AppError(StatusCode::FORBIDDEN, anyhow!("forbidden")))?;
-        Ok(res.clone())
+        let token = parts
+            .extract::<TypedHeader<Authorization<Bearer>>>()
+            .await?;
+
+        let secret = state
+            .secret_store
+            .get("JWT_SECRET")
+            .ok_or(anyhow!("JWT_SECRET not found"))?;
+
+        let res = Claims::decode(token.token(), secret.as_ref()).map_err(|e| match e.kind() {
+            jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
+                AppError::format_err_code(StatusCode::UNAUTHORIZED)(anyhow!("token expired"))
+            }
+            _ => AppError::format_err_code(StatusCode::FORBIDDEN)(anyhow!("invalid token")),
+        })?;
+
+        Ok(res)
     }
 }
+
+

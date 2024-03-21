@@ -9,16 +9,17 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(User::Table)
+                    .table(Tag::Table)
                     .if_not_exists()
-                    .col(ColumnDef::new(User::Id).integer().not_null().primary_key())
-                    .col(ColumnDef::new(User::Username).string().not_null())
-                    .col(ColumnDef::new(User::AvatarUrl).string().not_null())
                     .col(
-                        ColumnDef::new(User::CreateAt)
-                            .timestamp_with_time_zone()
-                            .default(Expr::current_timestamp()),
+                        ColumnDef::new(Tag::Id)
+                            .integer()
+                            .not_null()
+                            .auto_increment()
+                            .primary_key(),
                     )
+                    .col(ColumnDef::new(Tag::Name).string().not_null())
+                    .col(ColumnDef::new(Tag::Description).string().not_null())
                     .to_owned(),
             )
             .await
@@ -26,16 +27,15 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(Table::drop().table(User::Table).to_owned())
+            .drop_table(Table::drop().table(Tag::Table).to_owned())
             .await
     }
 }
 
 #[derive(DeriveIden)]
-pub enum User {
+pub enum Tag {
     Table,
     Id,
-    Username,
-    AvatarUrl,
-    CreateAt,
+    Name,
+    Description,
 }
