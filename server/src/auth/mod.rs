@@ -8,5 +8,6 @@ mod handler;
 pub fn auth_router() -> Router<AppState> {
     Router::new()
         .route("/login", get(handler::login))
-        .route("/callback", get(handler::callback))
+        .route("/authorized", get(handler::authorized))
+        .route("/refresh", get(handler::refresh))
 }

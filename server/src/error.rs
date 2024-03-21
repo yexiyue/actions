@@ -1,3 +1,4 @@
+use async_graphql::ErrorExtensions;
 use axum::{
     body::Body,
     http::{Response, StatusCode},
@@ -37,5 +38,11 @@ impl AppError {
     {
         let map_fn = move |err: T| -> AppError { AppError(code, err.into()) };
         map_fn
+    }
+}
+
+impl ErrorExtensions for AppError {
+    fn extend(&self) -> async_graphql::Error {
+        self.1.extend_with(|_, e| e.set("code", self.0.as_u16()))
     }
 }

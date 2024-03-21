@@ -1,9 +1,4 @@
-use crate::{
-    error::AppError,
-    jwt::Claims,
-    service::{SessionService, UserService},
-    AppState,
-};
+use crate::{error::AppError, jwt::Claims, service::UserService, AppState};
 
 use super::OAuth;
 use anyhow::{anyhow, Context, Result};
@@ -11,11 +6,12 @@ use axum::{
     extract::{Query, State},
     http::{header, status::StatusCode, HeaderMap},
     response::{IntoResponse, Redirect},
+    Json,
 };
 use axum_extra::extract::cookie::{Cookie, PrivateCookieJar, SameSite};
-use chrono::{TimeDelta, Utc};
 use oauth2::TokenResponse;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 pub async fn login(oauth: OAuth, jar: PrivateCookieJar) -> impl IntoResponse {
     let (url, csrf_token) = oauth.generate_oauth_url();
@@ -28,13 +24,13 @@ pub async fn login(oauth: OAuth, jar: PrivateCookieJar) -> impl IntoResponse {
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct CallbackParams {
+pub struct AuthorizedParams {
     code: String,
     state: String,
 }
 
-pub async fn callback(
-    Query(CallbackParams { code, state }): Query<CallbackParams>,
+pub async fn authorized(
+    Query(AuthorizedParams { code, state }): Query<AuthorizedParams>,
     State(AppState {
         req,
         coon,
@@ -66,10 +62,6 @@ pub async fn callback(
         .expect("refresh token not found")
         .secret();
 
-    let seconds = res.expires_in().expect("expires_in not found");
-    let expires_at =
-        Utc::now() + TimeDelta::from_std(seconds).expect("expires_in to time delta error");
-
     // 使用获取的access_token获取用户信息
     let user: serde_json::Value = req
         .get("https://api.github.com/user")
@@ -90,20 +82,7 @@ pub async fn callback(
             id: user_id as i32,
             username: username.to_owned(),
             avatar_url: avatar_url.to_owned(),
-            create_at: chrono::Utc::now().into(),
-        },
-    )
-    .await?;
-
-    // 创建会话记录保存refresh_token和access_token
-    SessionService::create_or_update_session(
-        &coon,
-        entity::session::Model {
-            id: 0,
-            user_id: user.id,
-            access_token: access_token.into(),
-            refresh_token: refresh_token.into(),
-            expires_at: expires_at.into(),
+            create_at: None,
         },
     )
     .await?;
@@ -114,20 +93,35 @@ pub async fn callback(
         .with_context(|| "get jwt secret error")?;
 
     // 生成jwt token
-    let token = Claims::new(access_token.to_string(), user_id as i32).encode(&jwt_secret)?;
+    let token = Claims::new(user_id as i32, access_token.clone(), refresh_token.clone())
+        .encode(&jwt_secret)?;
 
-    let token_cookie = Cookie::build(("token", token))
-        .http_only(true)
-        .path("/")
-        .secure(true)
-        .max_age(cookie::time::Duration::seconds_f64(seconds.as_secs_f64()))
-        .build();
+    Ok(Json(json!({
+        "token":token,
+        "user":user
+    })))
+}
 
-    let user_id_cookie = Cookie::build(("user_id", user_id.to_string()))
-        .http_only(true)
-        .path("/")
-        .secure(true)
-        .build();
+pub async fn refresh(
+    claims: Claims,
+    State(AppState { secret_store, .. }): State<AppState>,
+    oauth: OAuth,
+) -> Result<impl IntoResponse, AppError> {
+    let res = oauth.refresh_token(claims.refresh_token).await?;
+    let access_token = res.access_token().secret();
+    let refresh_token = res
+        .refresh_token()
+        .expect("refresh token not found")
+        .secret();
 
-    Ok((jar.add(token_cookie).add(user_id_cookie), Redirect::to("/")))
+    // 获取jwt密钥
+    let jwt_secret = secret_store
+        .get("JWT_SECRET")
+        .with_context(|| "get jwt secret error")?;
+    let token = Claims::new(claims.user_id, access_token.clone(), refresh_token.clone())
+        .encode(&jwt_secret)?;
+
+    Ok(Json(json!({
+        "token":token,
+    })))
 }

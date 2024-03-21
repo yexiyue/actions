@@ -5,36 +5,40 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize, SimpleObject)]
-#[sea_orm(table_name = "user")]
-#[graphql(concrete(name = "User", params()))]
+#[sea_orm(table_name = "comment")]
+#[graphql(concrete(name = "Comment", params()))]
 pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false)]
+    #[sea_orm(primary_key)]
     pub id: i32,
-    pub username: String,
-    pub avatar_url: String,
-    pub create_at: Option<DateTimeWithTimeZone>,
+    pub user_id: i32,
+    pub template_id: i32,
+    pub parent_comment_id: Option<i32>,
+    pub content: String,
+    pub create_at: Option<DateTime>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::comment::Entity")]
-    Comment,
     #[sea_orm(has_many = "super::comment_dislikes::Entity")]
     CommentDislikes,
     #[sea_orm(has_many = "super::comment_likes::Entity")]
     CommentLikes,
-    #[sea_orm(has_many = "super::favorites::Entity")]
-    Favorites,
-    #[sea_orm(has_many = "super::template::Entity")]
+    #[sea_orm(
+        belongs_to = "super::template::Entity",
+        from = "Column::Id",
+        to = "super::template::Column::Id",
+        on_update = "Cascade",
+        on_delete = "Cascade"
+    )]
     Template,
-    #[sea_orm(has_many = "super::template_history::Entity")]
-    TemplateHistory,
-}
-
-impl Related<super::comment::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Comment.def()
-    }
+    #[sea_orm(
+        belongs_to = "super::user::Entity",
+        from = "Column::Id",
+        to = "super::user::Column::Id",
+        on_update = "Cascade",
+        on_delete = "Cascade"
+    )]
+    User,
 }
 
 impl Related<super::comment_dislikes::Entity> for Entity {
@@ -49,21 +53,15 @@ impl Related<super::comment_likes::Entity> for Entity {
     }
 }
 
-impl Related<super::favorites::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Favorites.def()
-    }
-}
-
 impl Related<super::template::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Template.def()
     }
 }
 
-impl Related<super::template_history::Entity> for Entity {
+impl Related<super::user::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::TemplateHistory.def()
+        Relation::User.def()
     }
 }
 

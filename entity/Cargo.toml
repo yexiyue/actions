@@ -9,5 +9,7 @@ edition = "2021"
 sea-orm = { version = "0.12.14", features = [
     "sqlx-postgres",
     "runtime-tokio-native-tls",
+    "postgres-array",
 ] }
 serde = { version = "1.0.197", features = ["derive"] }
+async-graphql = { version = "7.0.2", features = ["chrono"] }
