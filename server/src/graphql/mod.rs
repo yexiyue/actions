@@ -4,10 +4,6 @@ use axum::{
     extract::State,
     response::{Html, IntoResponse},
 };
-use axum_extra::{
-    headers::{authorization::Bearer, Authorization},
-    TypedHeader,
-};
 
 use crate::{jwt::Claims, AppState};
 mod auth_guard;
@@ -31,10 +27,7 @@ pub async fn graphql_handler(
 ) -> GraphQLResponse {
     let mut req = req.into_inner();
 
-    req = req
-        .data(claims)
-        .data(state.auth)
-        .data(state.coon);
+    req = req.data(claims).data(state.auth).data(state.coon);
 
     state.schema.execute(req).await.into()
 }

@@ -3,9 +3,9 @@ use crate::{error::AppError, jwt::Claims, service::UserService, AppState};
 use super::OAuth;
 use anyhow::{anyhow, Context, Result};
 use axum::{
-    extract::{Query, State},
+    extract::State,
     http::{header, status::StatusCode, HeaderMap},
-    response::{IntoResponse, Redirect},
+    response::IntoResponse,
     Json,
 };
 use axum_extra::extract::cookie::{Cookie, PrivateCookieJar, SameSite};
@@ -20,7 +20,7 @@ pub async fn login(oauth: OAuth, jar: PrivateCookieJar) -> impl IntoResponse {
         .secure(true)
         .http_only(true)
         .build();
-    (jar.add(cookie), Redirect::to(&url.to_string()))
+    (jar.add(cookie), Json(json!({ "url": url.to_string() })))
 }
 
 #[derive(Deserialize, Serialize)]
@@ -30,7 +30,6 @@ pub struct AuthorizedParams {
 }
 
 pub async fn authorized(
-    Query(AuthorizedParams { code, state }): Query<AuthorizedParams>,
     State(AppState {
         req,
         coon,
@@ -40,6 +39,7 @@ pub async fn authorized(
     header: HeaderMap,
     oauth: OAuth,
     jar: PrivateCookieJar,
+    Json(AuthorizedParams { code, state }): Json<AuthorizedParams>,
 ) -> Result<impl IntoResponse, AppError> {
     let csrf = jar
         .get("csrf_token")
