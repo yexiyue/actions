@@ -1,6 +1,5 @@
 use async_graphql::MergedObject;
 
-mod history;
 mod user;
 
 #[derive(Debug, MergedObject, Default)]

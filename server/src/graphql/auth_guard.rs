@@ -1,11 +1,6 @@
 use anyhow::anyhow;
 use async_graphql::{ErrorExtensions, Guard, Result};
 use axum::http::StatusCode;
-use axum_extra::{
-    headers::{authorization::Bearer, Authorization},
-    TypedHeader,
-};
-use shuttle_runtime::SecretStore;
 
 use crate::{error::AppError, jwt::Claims};
 
